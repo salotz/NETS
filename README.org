@@ -1,0 +1,22 @@
+* Non-Equilibrium Transition State Sampling (NETS)
+
+** What?
+
+Start molecular dynamics trajectories (balls) and watch them
+fall into basins (nets).
+
+** Why?
+
+For validating committor probability predictions from Markov State
+Models (MSMs) of sampled transition processes.
+
+** How?
+
+1) Select nodes in your MSM according to their committor probability.
+2) Define criteria for basins.
+3) Run multiple molecular dynamics until they satisfy criteria for
+   reaching a basin. Use OpenMM for dynamics, and SCOOP for running
+   multiple trajectories across heterogeneous resources.
+4) Repeat until statistics are good enough.
+5) Derive committor correction factors.
+
