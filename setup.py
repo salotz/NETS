@@ -10,7 +10,8 @@ setup(
         'Click',
         'Numpy',
         'Pandas',
-        'Scipy'
+        'Scipy',
+        'MSMBuilder',
     ],
     entry_points={
         'console_scripts' : [

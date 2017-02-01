@@ -13,12 +13,12 @@ def cluster_frames_map(assignments):
     you can choose frames from a specific cluster.
 
     """
-    cluster_frames_map = col.defaultdict(list)
+    cluster_map = col.defaultdict(list)
     for traj_idx, cluster_idxs in assignments.items():
         for frame_idx, cluster_idx in enumerate(cluster_idxs):
-            cluster_frames_map[cluster_idx].append((traj_idx, frame_idx))
+            cluster_map[cluster_idx].append((traj_idx, frame_idx))
 
-    return cluster_frames_map
+    return cluster_map
 
 def committor_hist(committors, n_bins=20):
     """Bin committor values given bin widths for binning across 0.0 - 1.0
@@ -137,50 +137,3 @@ def gen_rst_seeds_input(traj_frame_tups, rst_seed_path, traj_ids):
             for frame_idx in g_df['frame_idx'].values:
                 wf.write("{}\n".format(traj_id))
                 wf.write("{}\n".format(frame_idx))
-
-
-if __name__ == "__main__":
-    import msmbuilder.dataset as msmdataset
-    import itertools as it
-    import os.path as osp
-    import numpy as np
-    import pandas as pd
-    import nets.main as nets
-
-    seh_dir = "/home/salotz/Dropbox/lab/sEH/"
-    tppu_dir = osp.join(seh_dir, "tppu_unbinding")
-
-    dataset_path = osp.join(tppu_dir, 'clust.h5')
-    assignments = msmdataset.dataset(dataset_path)
-    cluster_map = nets.cluster_frames_map(assignments)
-
-    nodes_path = osp.join(tppu_dir, "nodes.csv")
-    nodes_df = pd.read_csv(nodes_path, index_col=0)
-
-    committors = nodes_df['committor_prob'].values
-    non_basin_idxs = list(it.chain(*np.argwhere((committors != 0) & (committors != 1))))
-
-    hist, bin_edges = nets.committor_hist(committors)
-    bin_tups = nets.make_bin_tuples(bin_edges)
-
-    bin_assignments = nets.committor_bins(committors, bin_edges)
-    bin_idxs = range(len(bin_tups))
-    bin_samples = nets.sample_committors(cluster_map,
-                                         bin_assignments[non_basin_idxs], bin_idxs, 5)
-
-    seeds = list(it.chain(*bin_samples.values()))
-
-    seeds_df = nets.make_seeds_df(seeds, committors, bin_assignments[non_basin_idxs], bin_tups)
-    seeds_df_path = osp.join(tppu_dir, 'seeds.csv')
-    seeds_df.to_csv(seeds_df_path)
-    traj_frames = nets.get_seeds_traj_frames(cluster_map, seeds)
-
-    # this stuff is specific to how we generate seed coordinates in CHARMM
-    # get the traj ids which select the correct file
-    run_traj_counts = [8, 8, 8, 8, 8, 8, 24, 8, 8, 8, 8, 8]
-    traj_ids = nets.gen_traj_ids(run_traj_counts)
-    # then generate an input file to be used by a CHARMM script to make rst files
-    rst_seed_input_file = osp.join(tppu_dir, "scan_rst_idxs.dat")
-    nets.gen_rst_seeds_input(traj_frames, rst_seed_input_file, traj_ids)
-
-

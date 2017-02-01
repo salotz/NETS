@@ -2,3 +2,4 @@ Click
 Numpy
 Pandas
 Scipy
+MSMBuilder
