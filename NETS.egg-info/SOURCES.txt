@@ -1,0 +1,10 @@
+NETS.egg-info/PKG-INFO
+NETS.egg-info/SOURCES.txt
+NETS.egg-info/dependency_links.txt
+NETS.egg-info/entry_points.txt
+NETS.egg-info/requires.txt
+NETS.egg-info/top_level.txt
+nets/__init__.py
+nets/monitor.py
+nets/nets.py
+nets/seed.py

@@ -1,0 +1,3 @@
+[console_scripts]
+nets = nets.nets:cli
+

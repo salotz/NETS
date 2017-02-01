@@ -56,15 +56,13 @@ def make_bin_tuples(bin_edges):
 
     return bin_tups
 
-def sample_committors(cluster_map, bin_assignments, n_samples):
+def sample_committors(cluster_map, bin_assignments, bin_idxs, n_samples):
     """Take samples of frames from a committor bin.
 
     Returns:
     bin_samples : bin_idx -> (clust_idx, clust_frame_idx)
 
     """
-
-    bin_idxs = list(range(len(bin_edges) - 1))
 
     bin_dict = {bin_idx : list(it.chain(*np.argwhere(bin_assignments == bin_idx)))
                 for bin_idx in bin_idxs}
@@ -90,17 +88,20 @@ def sample_committors(cluster_map, bin_assignments, n_samples):
 
 def make_seeds_df(seeds, committors, bin_assignments, bin_tups):
     seeds_df = pd.DataFrame(seeds, columns=["clust_idx", "clust_frame_idx"])
-    seeds_df['committor_prob'] = committors[seeds_df['clust_idx'].values]
+    committors_col = []
+    for clust_idx in seeds_df['clust_idx'].values:
+        committors_col.append(committors[clust_idx])
+    seeds_df['committor_prob'] = committors_col
     seed_bin_assignments = [bin_assignments[clust_idx] for clust_idx in seeds_df['clust_idx']]
     seed_bins = [bin_tups[i] for i in seed_bin_assignments]
-    seeds_df['bin_idx'] = [i for i in range(len(seed_bins))]
+    seeds_df['bin_idx'] = seed_bin_assignments
     seeds_df['bin_l_edge'] = [b[0] for b in seed_bins]
     seeds_df['bin_center'] = [b[1] for b in seed_bins]
     seeds_df['bin_u_edge'] = [b[2] for b in seed_bins]
 
     return seeds_df
 
-def gen_rst_seeds(cluster_frames_map, clust_samples):
+def get_seeds_traj_frames(cluster_frames_map, clust_samples):
     """Given a list of (cluster_idx, clust_frame_idxs) generates a
     collection of CHARMM rst files as seeds for running NETS.
 
@@ -109,26 +110,49 @@ def gen_rst_seeds(cluster_frames_map, clust_samples):
     for clust_idx, frame_idx in clust_samples:
         traj_frames.append(cluster_frames_map[clust_idx][frame_idx])
 
-def monitor():
-    pass
+    return traj_frames
 
-def report():
-    pass
+def gen_traj_ids(run_traj_counts):
+    """Generates traj ids in the <run_idx>_<traj_idx> style from the
+    number of trajectories in each run.
 
-def restart():
-    pass
+    """
+
+    traj_ids = []
+    for run_idx, n_trajs in enumerate(run_traj_counts):
+        ids = ["{0:03}_{1:03}".format(run_idx + 1, run_traj_idx) for run_traj_idx
+               in range(n_trajs)]
+        traj_ids.extend(ids)
+
+    return traj_ids
+
+
+def gen_rst_seeds_input(traj_frame_tups, rst_seed_path, traj_ids):
+    df = pd.DataFrame(traj_frame_tups, columns=['traj_idx', 'frame_idx'])
+    df_gb = df.groupby('traj_idx')
+
+    with open(rst_seed_path, 'w') as wf:
+        for traj_idx, g_df in df_gb:
+            traj_id = traj_ids[traj_idx]
+            for frame_idx in g_df['frame_idx'].values:
+                wf.write("{}\n".format(traj_id))
+                wf.write("{}\n".format(frame_idx))
+
 
 if __name__ == "__main__":
     import msmbuilder.dataset as msmdataset
+    import itertools as it
     import os.path as osp
+    import numpy as np
     import pandas as pd
+    import nets.main as nets
 
     seh_dir = "/home/salotz/Dropbox/lab/sEH/"
     tppu_dir = osp.join(seh_dir, "tppu_unbinding")
 
     dataset_path = osp.join(tppu_dir, 'clust.h5')
     assignments = msmdataset.dataset(dataset_path)
-    cluster_map = cluster_frames_map(assignments)
+    cluster_map = nets.cluster_frames_map(assignments)
 
     nodes_path = osp.join(tppu_dir, "nodes.csv")
     nodes_df = pd.read_csv(nodes_path, index_col=0)
@@ -136,13 +160,27 @@ if __name__ == "__main__":
     committors = nodes_df['committor_prob'].values
     non_basin_idxs = list(it.chain(*np.argwhere((committors != 0) & (committors != 1))))
 
-    hist, bin_edges = committor_hist(committors)
-    bin_tups = make_bin_tuples(bin_edges)
+    hist, bin_edges = nets.committor_hist(committors)
+    bin_tups = nets.make_bin_tuples(bin_edges)
 
-    bin_assignments = committor_bins(committors, bin_edges)
-    # take out the basins
-    bin_samples = sample_committors(cluster_map, bin_assignments[non_basin_idxs], 5)
+    bin_assignments = nets.committor_bins(committors, bin_edges)
+    bin_idxs = range(len(bin_tups))
+    bin_samples = nets.sample_committors(cluster_map,
+                                         bin_assignments[non_basin_idxs], bin_idxs, 5)
 
     seeds = list(it.chain(*bin_samples.values()))
 
-    seeds_df = make_seeds_df(seeds, committors, bin_assignments[non_basin_idxs], bin_tups)
+    seeds_df = nets.make_seeds_df(seeds, committors, bin_assignments[non_basin_idxs], bin_tups)
+    seeds_df_path = osp.join(tppu_dir, 'seeds.csv')
+    seeds_df.to_csv(seeds_df_path)
+    traj_frames = nets.get_seeds_traj_frames(cluster_map, seeds)
+
+    # this stuff is specific to how we generate seed coordinates in CHARMM
+    # get the traj ids which select the correct file
+    run_traj_counts = [8, 8, 8, 8, 8, 8, 24, 8, 8, 8, 8, 8]
+    traj_ids = nets.gen_traj_ids(run_traj_counts)
+    # then generate an input file to be used by a CHARMM script to make rst files
+    rst_seed_input_file = osp.join(tppu_dir, "scan_rst_idxs.dat")
+    nets.gen_rst_seeds_input(traj_frames, rst_seed_input_file, traj_ids)
+
+
