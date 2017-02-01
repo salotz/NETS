@@ -14,7 +14,7 @@ def cli():
     pass
 
 @cli.command('seed')
-@click.argument('assignments', nargs=1, type=click.Path(exists=True),
+@click.option('--assignments', type=click.Path(exists=True),
                 help="Data-structure mapping trajectory->[cluster_id, ...] for each frame"
                 "of the trajectory. This is the default dataset of MSMBuilder clustering.")
 @click.argument('clusters', nargs=1, type=click.Path(exists=True))
